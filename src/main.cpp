@@ -197,7 +197,25 @@ public:
 
             m_canvas->setPosition(winSize / 2);
             m_canvas->setScale(zoom);
-            this->addChild(m_canvas);
+
+            // Framed panel behind the canvas so it reads as a contained
+            // surface instead of floating on the bare background.
+            float framePad = 14.f;
+            auto frame = CCScale9Sprite::create("GJ_square01.png");
+            frame->setContentSize({
+                m_texSize.width * zoom + framePad * 2.f,
+                m_texSize.height * zoom + framePad * 2.f
+            });
+            frame->setPosition(winSize / 2);
+            this->addChild(frame, 0);
+
+            this->addChild(m_canvas, 1);
+
+            // Filename title above the canvas.
+            auto title = CCLabelBMFont::create(relativeName.c_str(), "chatFont.fnt");
+            title->setScale(0.6f);
+            title->setPosition({winSize.width / 2, winSize.height - 20.f});
+            this->addChild(title, 10);
         }
 
         this->setupUI(winSize);
@@ -229,37 +247,53 @@ public:
         save->setPosition({winSize.width - 80.f, winSize.height - 25.f});
         menu->addChild(save);
 
-        // Colour palette (row under the top bar)
+        // Colour palette (row under the top bar), on its own panel.
         m_palette = {
             {255, 255, 255}, {0, 0, 0}, {255, 0, 0}, {0, 255, 0},
             {0, 0, 255}, {255, 255, 0}, {255, 128, 0}, {160, 32, 240},
         };
+        float swatchGap = 32.f;
+        float paletteY = winSize.height - 68.f;
+        float paletteWidth = swatchGap * static_cast<float>(m_palette.size()) + 20.f;
+
+        auto palettePanel = CCScale9Sprite::create("GJ_square01.png");
+        palettePanel->setContentSize({paletteWidth, 46.f});
+        palettePanel->setOpacity(190);
+        palettePanel->setPosition({20.f + paletteWidth / 2.f, paletteY});
+        this->addChild(palettePanel, 5);
+
         for (size_t i = 0; i < m_palette.size(); ++i) {
             auto swatch = CCSprite::createWithTexture(getWhitePixelTexture());
             swatch->setScale(22.f);
             swatch->setColor(m_palette[i]);
             auto btn = CCMenuItemSpriteExtra::create(swatch, this, menu_selector(PaintEditorLayer::onPickColor));
             btn->setTag(static_cast<int>(i));
-            btn->setPosition({35.f + 32.f * static_cast<float>(i), winSize.height - 70.f});
+            btn->setPosition({35.f + swatchGap * static_cast<float>(i), paletteY});
             menu->addChild(btn);
         }
 
-        // Brush sizes (bottom row)
+        // Bottom toolbar panel: brush sizes + eraser together on one bar.
+        float toolbarY = 32.f;
+        auto toolbarPanel = CCScale9Sprite::create("GJ_square01.png");
+        toolbarPanel->setContentSize({winSize.width - 40.f, 50.f});
+        toolbarPanel->setOpacity(190);
+        toolbarPanel->setPosition({winSize.width / 2.f, toolbarY});
+        this->addChild(toolbarPanel, 5);
+
         float sizes[] = {2.f, 5.f, 10.f};
         for (int i = 0; i < 3; ++i) {
             auto spr = ButtonSprite::create(fmt::format("{}px", static_cast<int>(sizes[i])).c_str());
             spr->setScale(0.6f);
             auto btn = CCMenuItemSpriteExtra::create(spr, this, menu_selector(PaintEditorLayer::onBrushSize));
             btn->setTag(static_cast<int>(sizes[i]));
-            btn->setPosition({50.f + 70.f * static_cast<float>(i), 30.f});
+            btn->setPosition({70.f + 70.f * static_cast<float>(i), toolbarY});
             menu->addChild(btn);
         }
 
-        // Eraser toggle
         auto eraserSpr = ButtonSprite::create("Eraser");
         eraserSpr->setScale(0.6f);
         auto eraser = CCMenuItemSpriteExtra::create(eraserSpr, this, menu_selector(PaintEditorLayer::onToggleEraser));
-        eraser->setPosition({winSize.width - 60.f, 30.f});
+        eraser->setPosition({winSize.width - 70.f, toolbarY});
         menu->addChild(eraser);
     }
 
@@ -324,8 +358,11 @@ public:
     void paintAt(CCTouch* touch) {
         if (!m_canvas) return;
 
-        auto layerPt = this->convertTouchToNodeSpace(touch);
-        auto local = m_canvas->convertToNodeSpace(this->convertToWorldSpace(layerPt));
+        // touch->getLocation() is already resolved to GL/world (design) space
+        // by cocos2d, so convert it straight into the canvas's local space -
+        // no intermediate round-trip through this layer needed.
+        auto worldPt = touch->getLocation();
+        auto local = m_canvas->convertToNodeSpace(worldPt);
 
         bool inside = local.x >= 0 && local.x <= m_texSize.width &&
                       local.y >= 0 && local.y <= m_texSize.height;
@@ -404,12 +441,19 @@ public:
         this->addChild(CCLayerColor::create({30, 30, 40, 255}), -10);
 
         auto title = CCLabelBMFont::create("Pick a texture to edit", "goldFont.fnt");
+        title->setScale(0.9f);
         title->setPosition({winSize.width / 2, winSize.height - 25.f});
-        this->addChild(title);
+        this->addChild(title, 10);
+
+        auto listPanel = CCScale9Sprite::create("GJ_square01.png");
+        listPanel->setContentSize({winSize.width - 80.f, winSize.height - 130.f});
+        listPanel->setOpacity(160);
+        listPanel->setPosition({winSize.width / 2.f, winSize.height / 2.f - 10.f});
+        this->addChild(listPanel, 1);
 
         m_listMenu = CCMenu::create();
         m_listMenu->setPosition({0.f, 0.f});
-        this->addChild(m_listMenu);
+        this->addChild(m_listMenu, 5);
 
         auto nav = CCMenu::create();
         nav->setPosition({0.f, 0.f});
@@ -463,14 +507,28 @@ public:
         int end = std::min(static_cast<int>(m_textures.size()), start + PER_PAGE);
 
         float y = winSize.height - 65.f;
+        float rowHeight = 26.f;
+        int rowIndex = 0;
         for (int i = start; i < end; ++i) {
+            // Faint alternating row tint for scannability.
+            if (rowIndex % 2 == 0) {
+                auto rowBg = CCSprite::createWithTexture(getWhitePixelTexture());
+                rowBg->setPosition({winSize.width / 2, y});
+                rowBg->setScaleX(winSize.width - 90.f);
+                rowBg->setScaleY(rowHeight - 2.f);
+                rowBg->setColor({255, 255, 255});
+                rowBg->setOpacity(18);
+                m_listMenu->addChild(rowBg);
+            }
+
             auto label = CCLabelBMFont::create(m_textures[i].relativeName.c_str(), "chatFont.fnt");
-            label->limitLabelWidth(winSize.width - 60.f, 0.9f, 0.3f);
+            label->limitLabelWidth(winSize.width - 100.f, 0.9f, 0.3f);
             auto btn = CCMenuItemSpriteExtra::create(label, this, menu_selector(TextureBrowserLayer::onSelect));
             btn->setTag(i);
             btn->setPosition({winSize.width / 2, y});
             m_listMenu->addChild(btn);
-            y -= 26.f;
+            y -= rowHeight;
+            rowIndex++;
         }
 
         m_pageLabel->setString(fmt::format("{} / {}", m_page + 1, this->pageCount()).c_str());
