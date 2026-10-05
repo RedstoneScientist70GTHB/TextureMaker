@@ -1,0 +1,27 @@
+{
+    "geode": "5.10.1",
+    "gd": {
+        "win": "2.2081",
+        "android": "2.2081",
+        "mac": "2.2081"
+    },
+    "id": "com.yourname.textureeditor",
+    "name": "Texture Editor",
+    "version": "v1.0.0",
+    "developer": "YourName",
+    "description": "Adds a main-menu button that opens an in-game paint editor for individual GD textures (not spritesheets), with export to a Texture Loader texture pack.",
+    "settings": {
+        "pack-name": {
+            "type": "string",
+            "default": "my-texture-pack",
+            "name": "Pack Name",
+            "description": "Folder name of the texture pack your edits are saved into (letters, numbers, dashes)"
+        },
+        "pack-author": {
+            "type": "string",
+            "default": "yourname",
+            "name": "Pack Author",
+            "description": "Author name written into the pack's pack.json"
+        }
+    }
+}
