@@ -1,3 +1,1 @@
-Sorry this was made with claude.
-
-Texture maker geode mod self-explanatory
+A simple geode mod that allows you to edit SOME of the games textures in game!
